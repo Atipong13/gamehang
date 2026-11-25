@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>วงกลมระเบิด</title>
+<link href="https://fonts.googleapis.com/css2?family=Mali:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#1d1a3a;--card:#2b2755;--ink:#fff7e6;--hot:#ff5a36;--sun:#ffc93c;--mint:#5be0b3;--dim:#8f8ab8}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font-family:'Mali',system-ui,sans-serif;text-align:center}
+body{padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom))}
+h1{margin:8px 0 4px;font-size:2rem}
+input,button{font:inherit;border-radius:14px;border:0;padding:12px 16px;margin:4px}
+input{background:var(--card);color:var(--ink);width:min(260px,80%);text-align:center}
+button{background:var(--sun);color:#2a1d00;font-weight:700;cursor:pointer}
+button.alt{background:var(--card);color:var(--ink)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--mint)}
+.hide{display:none}
+#ring{position:relative;width:min(340px,92vw);height:min(340px,92vw);margin:24px auto}
+.p{position:absolute;width:76px;margin:-30px 0 0 -38px;padding:8px 4px;border-radius:16px;background:var(--card);font-size:.85rem;border:3px solid transparent;transition:transform .15s}
+.p .e{font-size:1.6rem;display:block}
+.p.me{border-color:var(--mint)}
+.p.dead{opacity:.3;filter:grayscale(1)}
+.p.hold{background:var(--hot);animation:shake .25s infinite}
+.p.target{cursor:pointer}
+.p.target:hover{transform:scale(1.12)}
+@keyframes shake{50%{transform:translateX(3px) rotate(3deg)}}
+@media (prefers-reduced-motion:reduce){.p.hold{animation:none}}
+#msg{min-height:2.4em;font-size:1.2rem;color:var(--sun)}
+#hint{color:var(--dim);font-size:.9rem}
+#top{color:var(--dim);font-size:.9rem;margin-top:20px}
+#err{color:var(--hot)}
+</style>
+</head>
+<body>
+<h1>💣 วงกลมระเบิด</h1>
+
+<div id="login">
+  <p>ส่งระเบิดต่อให้เพื่อน ใครถือตอนระเบิดแตก คนนั้นตกรอบ!</p>
+  <input id="name" placeholder="ชื่อเล่นของคุณ" maxlength="12"><br>
+  <input id="code" placeholder="รหัสห้อง (เช่น ABCD)" maxlength="6"><br>
+  <button id="rand" class="alt">สุ่มรหัสห้อง</button>
+  <button id="join">เข้าห้อง</button>
+  <div id="err"></div>
+  <p><a href="/wheel.html" style="color:var(--sun)">🎡 ไปเล่นวงล้อตาใคร</a></p>
+</div>
+
+<div id="game" class="hide">
+  <div id="hint"></div>
+  <div id="ring"></div>
+  <div id="msg"></div>
+  <button id="start" class="hide">เริ่มเกม</button>
+</div>
+<div id="top"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const socket = io();
+let st = null;
+
+$('rand').onclick = () => { $('code').value = Math.random().toString(36).slice(2, 6).toUpperCase(); };
+$('join').onclick = () => {
+  if (!$('code').value.trim()) { $('err').textContent = 'ใส่รหัสห้องก่อน หรือกด "สุ่มรหัสห้อง"'; return; }
+  socket.emit('join', { name: $('name').value, code: $('code').value });
+};
+$('start').onclick = () => socket.emit('start');
+socket.on('err', (m) => { $('err').textContent = m; });
+
+socket.on('state', (s) => {
+  st = s;
+  $('login').classList.add('hide'); $('game').classList.remove('hide');
+  $('hint').textContent = 'ห้อง ' + s.code + ' · ชวนเพื่อนใส่รหัสนี้';
+  $('msg').textContent = s.msg;
+  const ring = $('ring'); ring.innerHTML = '';
+  const n = s.players.length;
+  s.players.forEach((p, i) => {
+    const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+    const d = document.createElement('div');
+    d.className = 'p' + (p.id === socket.id ? ' me' : '') + (p.alive ? '' : ' dead') + (p.id === s.holder ? ' hold' : '');
+    d.style.left = 50 + Math.cos(a) * 40 + '%';
+    d.style.top = 50 + Math.sin(a) * 40 + '%';
+    d.innerHTML = '<span class="e">' + (p.id === s.holder ? '💣' : p.alive ? '😀' : '💀') + '</span>';
+    d.append(p.name);
+    if (s.phase === 'playing' && s.holder === socket.id && p.alive && p.id !== socket.id) {
+      d.classList.add('target'); d.onclick = () => socket.emit('pass', p.id);
+    }
+    ring.appendChild(d);
+  });
+  const canStart = s.host === socket.id && s.phase !== 'playing' && n >= 2;
+  $('start').classList.toggle('hide', !canStart);
+  $('start').textContent = s.phase === 'over' ? 'เล่นอีกรอบ' : 'เริ่มเกม';
+  if (s.phase === 'playing' && s.holder === socket.id) $('hint').textContent = '💣 อยู่ที่คุณ! แตะชื่อเพื่อนเพื่อส่งต่อ';
+  $('top').textContent = s.top.length ? '🏆 ผู้ชนะสะสม: ' + s.top.map(([k, v]) => k + ' ' + v).join(' · ') : '';
+});
+</script>
+</body>
+</html>
