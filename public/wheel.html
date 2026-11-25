@@ -54,6 +54,8 @@ button:focus-visible,textarea:focus-visible{outline:3px solid var(--mint)}
     <textarea id="phrases" aria-label="ประโยคเสียงพูด"></textarea>
     <p>4. ทำเสียงให้เหมือนคนจริง</p>
     <select id="voice" aria-label="เลือกเสียงอ่าน"></select>
+    <div id="vnote" style="color:var(--hot);font-size:.9rem"></div>
+    <button id="tst" style="background:var(--card);color:var(--ink);padding:10px 16px;margin:4px 0;width:100%">🔈 ทดสอบเสียงพูด</button>
     <button id="rec">🎙️ อัดเสียงตัวเอง/เพื่อน (ใช้แทนเสียงอ่าน)</button>
     <div id="clips"></div>
   </div>
@@ -112,6 +114,7 @@ function bestVoice() {
 }
 function fillVoices() {
   const L = thVoices(), sel = $('voice'); sel.innerHTML = '';
+  $('vnote').textContent = L.length ? '' : 'ยังไม่พบเสียงอ่านภาษาไทยในเครื่องนี้ ถ้าไม่มีเสียงพูด ให้ใช้ Edge/มือถือ หรืออัดเสียงเองแทน';
   if (!L.length) { sel.style.display = 'none'; return; }
   sel.style.display = '';
   L.forEach((v) => { const o = document.createElement('option'); o.value = v.name; o.textContent = v.name; sel.appendChild(o); });
@@ -126,6 +129,12 @@ $('voice').onchange = (e) => {
 
 // ---- คลิปเสียงจริง: อัดจากไมค์ (เก็บในเบราว์เซอร์) + ไฟล์ใน public/sounds ----
 let db = null, clips = [], fileClips = [], clipBag = [], lastClip = null, curAudio = null;
+const player = new Audio(), keepU = []; // player ใช้ตัวเดียวตลอด / keepU กันเบราว์เซอร์เก็บกวาดเสียงพูดทิ้งกลางคัน
+const SILENT = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+function unlock() { // มือถือ (โดยเฉพาะ iPhone) ให้พูด/เล่นเสียงได้เฉพาะที่เริ่มจากการแตะ จึงปลุกไว้ตอนกดหมุน
+  try { player.src = SILENT; player.play().catch(() => {}); } catch {}
+  if (hasTTS) { try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; u.lang = 'th-TH'; speechSynthesis.speak(u); } catch {} }
+}
 const openDB = () => new Promise((res) => {
   try {
     const r = indexedDB.open('gamehang', 1);
@@ -190,22 +199,25 @@ function speak(who, text) { // เรียกชื่อ 3 ครั้ง แ
   if (hasTTS) speechSynthesis.cancel();
   const v = hasTTS ? bestVoice() : null;
   const seq = [[who, 1.4, 1.3], [who, 1.6, 1.3], [who, 1.8, 1.25], [text, 1.5, 0.95]];
-  (function run(i) {
+  const run = function (i) {
     if (id !== speakId) return;
     if (i === 3) {
       const c = pickClip();
-      if (c) { curAudio = new Audio(c.url); curAudio.play().catch(() => {}); return; }
+      if (c) { curAudio = player; player.src = c.url; player.play().catch(() => {}); return; }
     }
     if (i >= seq.length || !hasTTS) return;
     const u = new SpeechSynthesisUtterance(seq[i][0]);
     u.lang = 'th-TH'; u.pitch = seq[i][1]; u.rate = seq[i][2]; if (v) u.voice = v;
     u.onend = () => setTimeout(() => run(i + 1), i < 2 ? 0 : 350);
     u.onerror = () => {};
-    speechSynthesis.speak(u);
-  })(0);
+    keepU.push(u); speechSynthesis.speak(u);
+  };
+  keepU.length = 0;
+  setTimeout(() => run(0), 150); // Chrome มักทิ้งเสียงที่สั่งพูดทันทีหลัง cancel()
 }
 $('snd').onclick = () => { soundOn = !soundOn; if (!soundOn) { speakId++; if (curAudio) curAudio.pause(); if (hasTTS) speechSynthesis.cancel(); } $('snd').textContent = '🔊 เสียง: ' + (soundOn ? 'เปิด' : 'ปิด'); $('snd').setAttribute('aria-pressed', soundOn); };
 $('pop').onclick = () => $('pop').classList.remove('on');
+$('tst').onclick = () => { unlock(); speak(names[0] || 'ทดสอบ', 'ได้ยินเสียงนี้ไหม'); };
 const g = $('c').getContext('2d');
 const save = () => { try { localStorage.setItem('wheel-v3', JSON.stringify({ names, items })); localStorage.setItem('wheel-ph2', JSON.stringify(phrases)); } catch {} };
 
@@ -251,6 +263,7 @@ $('items').oninput = (e) => {
 $('spin').onclick = () => {
   if (busy) return;
   busy = true; $('spin').disabled = true; $('pop').classList.remove('on');
+  unlock();
   try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch {}
   const start = angle, total = TAU * (5 + Math.random() * 3) + Math.random() * TAU;
   const dur = 4200, t0 = performance.now();

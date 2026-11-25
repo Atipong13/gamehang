@@ -86,5 +86,5 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3100;
 srv.listen(PORT, () => console.log('Gamehang รันที่ http://localhost:' + PORT));

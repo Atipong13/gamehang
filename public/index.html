@@ -31,6 +31,9 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--mint)}
 #hint{color:var(--dim);font-size:.9rem}
 #top{color:var(--dim);font-size:.9rem;margin-top:20px}
 #err{color:var(--hot)}
+#wheelbtn{display:inline-block;margin:24px 0 8px;padding:12px 22px;border-radius:14px;background:var(--card);color:var(--ink);font-weight:700;text-decoration:none}
+#wheelbtn:hover{background:var(--sun);color:#2a1d00}
+#wheelbtn:focus-visible{outline:3px solid var(--mint)}
 </style>
 </head>
 <body>
@@ -43,7 +46,6 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--mint)}
   <button id="rand" class="alt">สุ่มรหัสห้อง</button>
   <button id="join">เข้าห้อง</button>
   <div id="err"></div>
-  <p><a href="/wheel.html" style="color:var(--sun)">🎡 ไปเล่นวงล้อตาใคร</a></p>
 </div>
 
 <div id="game" class="hide">
@@ -53,6 +55,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--mint)}
   <button id="start" class="hide">เริ่มเกม</button>
 </div>
 <div id="top"></div>
+<a id="wheelbtn" href="/wheel.html">🎡 กลับไปเกมวงล้อ</a>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
